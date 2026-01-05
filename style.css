@@ -7,16 +7,23 @@ body {
     text-align: center;
 }
 
+/* Header at the top */
 h1 {
     position: absolute;
     top: 10px;
-    width: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    font-size: 32px;
+    z-index: 10;  /* ensure on top */
 }
 
+/* Paragraph below the header */
 p {
     position: absolute;
-    top: 40px;
-    width: 100%;
-    font-size: 14px;
+    top: 60px;   /* lower than h1 */
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 16px;
+    z-index: 10;  /* ensure on top */
 }
-
