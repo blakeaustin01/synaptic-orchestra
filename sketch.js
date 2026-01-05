@@ -1,121 +1,88 @@
 let nodes = [];
+let instruments = ['sine', 'triangle', 'square', 'sawtooth'];
+let synths = [];
 
 function setup() {
-    createCanvas(windowWidth, windowHeight);
+    let cnv = createCanvas(windowWidth, windowHeight);
+    cnv.style('z-index', '-1'); // canvas behind text
     noStroke();
-    // Create random nodes
-    for (let i = 0; i < 20; i++) {
-        let types = ['attractor', 'repeller', 'oscillator', 'chameleon'];
-        nodes.push(new Node(random(width), random(height), random(types)));
+
+    // Create 6 stable nodes (representing instruments)
+    for (let i = 0; i < 6; i++) {
+        let node = {
+            x: random(width*0.2, width*0.8),
+            y: random(height*0.3, height*0.7),
+            vx: random(-0.3, 0.3),
+            vy: random(-0.3, 0.3),
+            size: 50,
+            color: color(random(100,255), random(100,255), random(100,255)),
+            pitchBase: 60 + i*2,  // different starting pitch for each instrument
+            synth: new Tone.Synth({
+                oscillator: { type: instruments[i % instruments.length] },
+                envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 0.5 }
+            }).toDestination()
+        };
+        nodes.push(node);
+        synths.push(node.synth);
     }
+
+    // Start Tone.js Transport for rhythm
+    Tone.Transport.bpm.value = 80;
+    Tone.Transport.start();
+
+    // Schedule each node to play a repeating note
+    nodes.forEach((node, idx) => {
+        Tone.Transport.scheduleRepeat((time) => {
+            let pitch = node.pitchBase + floor(random(-2,3)); // slight variations
+            node.synth.triggerAttackRelease(Tone.Frequency(pitch,"midi"), "8n", time);
+        }, "0.5"); // every half beat
+    });
 }
 
-// Node class
-class Node {
-    constructor(x, y, type) {
-        this.x = x;
-        this.y = y;
-        this.vx = 0;
-        this.vy = 0;
-        this.type = type;
-        this.size = 20;
-        this.color = color(random(255), random(255), random(255));
-        this.pitch = 60 + floor(random(12)); // MIDI note
-        this.timbre = ['sine', 'square', 'triangle'][floor(random(3))];
-        this.sound = new Tone.Synth({
-            oscillator: { type: this.timbre },
-            envelope: { attack: 0.05, release: 0.3 }
-        }).toDestination();
-    }
-
-    applyForce(fx, fy) {
-        this.vx += fx;
-        this.vy += fy;
-    }
-
-    update() {
-        this.x += this.vx;
-        this.y += this.vy;
-        this.vx *= 0.9;
-        this.vy *= 0.9;
-
-        // Keep nodes in canvas
-        this.x = constrain(this.x, 0, width);
-        this.y = constrain(this.y, 0, height);
-
-        // Color change for chameleon
-        if(this.type === 'chameleon') {
-            this.color = color(random(255), random(255), random(255));
-        }
-    }
-
-    display() {
-        fill(this.color);
-        ellipse(this.x, this.y, this.size);
-    }
-
-    playSound() {
-        let midi = 60 + floor(map(this.y, 0, height, 0, 24));
-        this.sound.triggerAttackRelease(Tone.Frequency(midi, "midi"), "8n");
-    }
-}
-
-// Node interactions
-function applyNodeInteractions() {
-    for(let i = 0; i < nodes.length; i++) {
-        let a = nodes[i];
-        for(let j = i+1; j < nodes.length; j++) {
-            let b = nodes[j];
-            let dx = b.x - a.x;
-            let dy = b.y - a.y;
-            let distSq = dx*dx + dy*dy;
-            if(distSq === 0) distSq = 0.01;
-
-            let force = 0;
-            if(a.type === 'attractor') force = 50 / distSq;
-            if(a.type === 'repeller') force = -100 / distSq;
-
-            let fx = force * dx;
-            let fy = force * dy;
-
-            b.applyForce(fx, fy);
-            a.applyForce(-fx, -fy);
-        }
-    }
-}
-
-// Main draw loop
 function draw() {
     background(17);
 
-    applyNodeInteractions();
+    nodes.forEach(node => {
+        // Slow stable movement
+        node.x += node.vx;
+        node.y += node.vy;
 
-    for(let node of nodes){
-        node.update();
-        node.display();
-    }
+        // Bounce off edges
+        if (node.x < 0 || node.x > width) node.vx *= -1;
+        if (node.y < 0 || node.y > height) node.vy *= -1;
+
+        // Draw node
+        fill(node.color);
+        ellipse(node.x, node.y, node.size);
+    });
 }
 
-// Interactions
-function mousePressed() {
-    for(let node of nodes){
-        let d = dist(mouseX, mouseY, node.x, node.y);
-        if(d < node.size){
-            node.playSound();
-        }
-    }
-}
-
+// Interaction: Slightly nudge nodes on drag
 function mouseDragged() {
-    let dx = mouseX - pmouseX;
-    let dy = mouseY - pmouseY;
-    for(let node of nodes){
-        node.applyForce(dx * 0.05, dy * 0.05);
-    }
+    let dx = (mouseX - pmouseX) * 0.1;
+    let dy = (mouseY - pmouseY) * 0.1;
+
+    nodes.forEach(node => {
+        node.vx += dx;
+        node.vy += dy;
+
+        // Small pitch modulation based on drag
+        let mod = map(abs(dx)+abs(dy),0,50,-2,2);
+        node.pitchBase += mod;
+        node.pitchBase = constrain(node.pitchBase, 48, 72);
+    });
 }
 
-// Resize canvas
+// Tap node to emphasize it (increase volume briefly)
+function mousePressed() {
+    nodes.forEach(node => {
+        let d = dist(mouseX, mouseY, node.x, node.y);
+        if (d < node.size/2) {
+            node.synth.triggerAttackRelease(Tone.Frequency(node.pitchBase,"midi"), "4n");
+        }
+    });
+}
+
 function windowResized() {
     resizeCanvas(windowWidth, windowHeight);
 }
-
