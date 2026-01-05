@@ -1,86 +1,132 @@
 let nodes = [];
 let instruments = ['sine', 'triangle', 'square', 'sawtooth'];
-let synths = [];
+let ambientSynth;
+let scale = [0,2,4,5,7,9,11]; // C major
+let tempo = 80; 
 
 function setup() {
     let cnv = createCanvas(windowWidth, windowHeight);
-    cnv.style('z-index', '-1'); // canvas behind text
+    cnv.style('z-index','-1'); 
     noStroke();
 
-    // Create 6 stable nodes (representing instruments)
-    for (let i = 0; i < 6; i++) {
-        let node = {
-            x: random(width*0.2, width*0.8),
-            y: random(height*0.3, height*0.7),
-            vx: random(-0.3, 0.3),
-            vy: random(-0.3, 0.3),
-            size: 50,
-            color: color(random(100,255), random(100,255), random(100,255)),
-            pitchBase: 60 + i*2,  // different starting pitch for each instrument
-            synth: new Tone.Synth({
-                oscillator: { type: instruments[i % instruments.length] },
-                envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 0.5 }
-            }).toDestination()
-        };
-        nodes.push(node);
-        synths.push(node.synth);
+    // Create nodes: mix of instruments and ambient/glitch nodes
+    for (let i = 0; i < 8; i++) {
+        nodes.push(createNode('instrument'));
     }
+    for (let i = 0; i < 2; i++) {
+        nodes.push(createNode('ambient'));
+    }
+    
+    // Ambient synth for background pads
+    ambientSynth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'triangle' },
+        envelope: { attack: 1, release: 2 }
+    }).toDestination();
 
-    // Start Tone.js Transport for rhythm
-    Tone.Transport.bpm.value = 80;
+    // Start Transport
+    Tone.Transport.bpm.value = tempo;
     Tone.Transport.start();
 
-    // Schedule each node to play a repeating note
-    nodes.forEach((node, idx) => {
-        Tone.Transport.scheduleRepeat((time) => {
-            let pitch = node.pitchBase + floor(random(-2,3)); // slight variations
+    // Schedule repeating notes
+    nodes.forEach((node) => scheduleNode(node));
+}
+
+// Node factory
+function createNode(type) {
+    let node = {
+        x: random(width*0.2, width*0.8),
+        y: random(height*0.3, height*0.7),
+        vx: random(-0.2,0.2),
+        vy: random(-0.2,0.2),
+        size: type==='ambient'?60:50,
+        color: color(random(100,255), random(100,255), random(100,255)),
+        pitchBase: 60 + floor(random(-3,3)),
+        type: type,
+        synth: type==='instrument'?new Tone.Synth({
+            oscillator: { type: random(instruments) },
+            envelope: { attack: 0.1, decay: 0.2, sustain:0.5, release:0.5 }
+        }).toDestination():null
+    };
+    return node;
+}
+
+// Schedule node repeating notes
+function scheduleNode(node) {
+    if(node.type==='instrument'){
+        Tone.Transport.scheduleRepeat((time)=>{
+            let pitch = node.pitchBase + scale[floor(random(scale.length))];
             node.synth.triggerAttackRelease(Tone.Frequency(pitch,"midi"), "8n", time);
-        }, "0.5"); // every half beat
-    });
+        }, "0.5");
+    } else if(node.type==='ambient'){
+        Tone.Transport.scheduleRepeat((time)=>{
+            let pitch = node.pitchBase + scale[floor(random(scale.length))];
+            ambientSynth.triggerAttackRelease([pitch, pitch+7], "1n", time); // long pad
+        }, "2");
+    }
 }
 
 function draw() {
     background(17);
 
+    // Move nodes slowly, bounce off edges
     nodes.forEach(node => {
-        // Slow stable movement
         node.x += node.vx;
         node.y += node.vy;
 
-        // Bounce off edges
-        if (node.x < 0 || node.x > width) node.vx *= -1;
-        if (node.y < 0 || node.y > height) node.vy *= -1;
+        if(node.x<0 || node.x>width) node.vx*=-1;
+        if(node.y<0 || node.y>height) node.vy*=-1;
 
-        // Draw node
+        // Slight color evolution
+        if(node.type==='instrument'){
+            node.color = color(
+                (red(node.color)+0.1)%255,
+                (green(node.color)+0.1)%255,
+                (blue(node.color)+0.1)%255
+            );
+        }
+
         fill(node.color);
         ellipse(node.x, node.y, node.size);
     });
 }
 
-// Interaction: Slightly nudge nodes on drag
+// Interaction: drag nudges nodes, pinch/stretch adjusts tempo
 function mouseDragged() {
-    let dx = (mouseX - pmouseX) * 0.1;
-    let dy = (mouseY - pmouseY) * 0.1;
+    let dx = (mouseX - pmouseX) * 0.05;
+    let dy = (mouseY - pmouseY) * 0.05;
 
-    nodes.forEach(node => {
+    nodes.forEach(node=>{
         node.vx += dx;
         node.vy += dy;
-
-        // Small pitch modulation based on drag
-        let mod = map(abs(dx)+abs(dy),0,50,-2,2);
-        node.pitchBase += mod;
+        // Slight pitch shift
+        node.pitchBase += dx*0.5;
         node.pitchBase = constrain(node.pitchBase, 48, 72);
     });
 }
 
-// Tap node to emphasize it (increase volume briefly)
+// Tap node: emphasize note
 function mousePressed() {
-    nodes.forEach(node => {
+    nodes.forEach(node=>{
         let d = dist(mouseX, mouseY, node.x, node.y);
-        if (d < node.size/2) {
-            node.synth.triggerAttackRelease(Tone.Frequency(node.pitchBase,"midi"), "4n");
+        if(d<node.size/2){
+            if(node.type==='instrument'){
+                node.synth.triggerAttackRelease(Tone.Frequency(node.pitchBase,"midi"), "4n");
+            } else if(node.type==='ambient'){
+                ambientSynth.triggerAttackRelease([node.pitchBase,node.pitchBase+7],"1n");
+            }
         }
     });
+}
+
+// Pinch gesture (multi-touch) adjusts tempo
+function touchMoved(){
+    if(touches.length===2){
+        let dx = abs(touches[0].x - touches[1].x);
+        let dy = abs(touches[0].y - touches[1].y);
+        let dist = sqrt(dx*dx + dy*dy);
+        tempo = map(dist, 50, width, 60, 140);
+        Tone.Transport.bpm.value = constrain(tempo,60,140);
+    }
 }
 
 function windowResized() {
