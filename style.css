@@ -1,52 +1,41 @@
-/* --- Body and general page styling --- */
 body {
     margin: 0;
-    overflow: hidden;       /* no scrollbars */
-    background-color: #111; /* dark background */
-    color: #eee;            /* light text */
-    font-family: 'Helvetica', sans-serif;
+    overflow: hidden;
+    background-color: #111;
+    color: #eee;
+    font-family: sans-serif;
     text-align: center;
 }
 
-/* --- Canvas behind everything --- */
 canvas {
-    position: absolute;     /* position canvas absolutely */
+    position: absolute;
     top: 0;
     left: 0;
-    z-index: 0;             /* behind all HTML elements */
+    z-index: 0;
 }
 
-/* --- Header text --- */
 h1 {
     position: absolute;
-    top: 10px;              /* 10px from top */
-    left: 50%;              /* center horizontally */
+    top: 10px;
+    left: 50%;
     transform: translateX(-50%);
-    margin: 0;
     font-size: 32px;
-    z-index: 10;            /* on top of canvas */
+    z-index: 10;
+    margin: 0;
 }
 
-/* --- Subtext / instructions --- */
 p {
     position: absolute;
-    top: 60px;              /* slightly below header */
+    top: 60px;
     left: 50%;
     transform: translateX(-50%);
     font-size: 16px;
-    z-index: 10;            /* on top of canvas */
-    color: #ccc;            /* slightly dimmer than header */
+    z-index: 10;
+    margin: 0;
+    color: #ccc;
 }
 
-/* --- Optional: style for mobile devices --- */
 @media only screen and (max-width: 768px) {
-    h1 {
-        font-size: 24px;
-        top: 5px;
-    }
-
-    p {
-        font-size: 14px;
-        top: 40px;
-    }
+    h1 { font-size: 24px; top: 5px; }
+    p { font-size: 14px; top: 40px; }
 }
