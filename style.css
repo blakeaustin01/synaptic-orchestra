@@ -7,13 +7,6 @@ body {
     text-align: center;
 }
 
-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 0;
-}
-
 h1 {
     position: absolute;
     top: 10px;
@@ -21,7 +14,6 @@ h1 {
     transform: translateX(-50%);
     font-size: 32px;
     z-index: 10;
-    margin: 0;
 }
 
 p {
@@ -31,11 +23,12 @@ p {
     transform: translateX(-50%);
     font-size: 16px;
     z-index: 10;
-    margin: 0;
     color: #ccc;
 }
 
-@media only screen and (max-width: 768px) {
-    h1 { font-size: 24px; top: 5px; }
-    p { font-size: 14px; top: 40px; }
+canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 0;
 }
