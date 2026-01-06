@@ -1,127 +1,133 @@
-// 🎼 Ultimate Generative AI Orchestra
 let melodySynth, chordSynth, bassSynth, padSynth, percSynth;
-let melodyPattern = [], chordPattern = [], bassPattern = [], percPattern = [];
-let scale = [0,2,4,5,7,9,11]; // C major
-let rootMidi = 60;
+let melodyNotes = [], chordRoots = [];
+let scale = [0,2,4,5,7,9,11]; // Major scale
+let rootMidi = 60;             // C4
 let bpm = 90;
 
-function setup(){
+let playing = false;
+
+function setup() {
     createCanvas(windowWidth, windowHeight);
-    noStroke();
 
-    Tone.start(); // user gesture required
+    // Hide visuals until start
+    noLoop();
 
-    // === Synth Layers ===
-    melodySynth = new Tone.Synth({oscillator:{type:'triangle'},envelope:{attack:0.05,release:0.3}}).toDestination();
-    chordSynth = new Tone.PolySynth(Tone.Synth,{oscillator:{type:'sine'},envelope:{attack:0.2,release:1}}).toDestination();
-    bassSynth = new Tone.MonoSynth({oscillator:{type:'square'},filter:{Q:2,type:'lowpass',rolloff:-24},envelope:{attack:0.01,decay:0.3,sustain:0.8,release:0.5}}).toDestination();
-    padSynth = new Tone.PolySynth(Tone.Synth,{oscillator:{type:'sawtooth'},envelope:{attack:2,release:4}}).toDestination();
-    percSynth = new Tone.MembraneSynth({pitchDecay:0.05,octaves:4,envelope:{attack:0.001,decay:0.2,sustain:0,release:0.1}}).toDestination();
+    // Setup Start button
+    document.getElementById("startBtn").addEventListener("click", async () => {
+        await Tone.start();
+        startOrchestra();
+    });
+}
+
+function startOrchestra() {
+    document.getElementById("startUI").style.display = "none";
+    loop();
+
+    // Create synth layers
+    melodySynth = new Tone.Synth({oscillator:{type:"triangle"},envelope:{attack:0.05,release:0.25}}).toDestination();
+    chordSynth = new Tone.PolySynth(Tone.Synth,{oscillator:{type:"sine"},envelope:{attack:0.2,release:1}}).toDestination();
+    bassSynth = new Tone.MonoSynth({oscillator:{type:"square"},filter:{type:"lowpass"},envelope:{attack:0.01,release:0.3}}).toDestination();
+    padSynth = new Tone.PolySynth(Tone.Synth,{oscillator:{type:"sawtooth"},envelope:{attack:1,release:2}}).toDestination();
+    percSynth = new Tone.MembraneSynth({pitchDecay:0.05,octaves:3,envelope:{attack:0.001,decay:0.2,release:0.2}}).toDestination();
 
     Tone.Transport.bpm.value = bpm;
     Tone.Transport.start();
 
-    // === Generate Patterns ===
+    // Generate patterns
     generateMelody();
     generateChords();
-    generateBass();
-    generatePercussion();
 
-    // === Schedule Patterns ===
+    // Schedule layers
     scheduleMelody();
-    scheduleChords();
     scheduleBass();
+    scheduleChords();
     schedulePads();
     schedulePercussion();
+
+    playing = true;
 }
 
-// --- Pattern Generators ---
+// Create a random melody pattern
 function generateMelody(){
+    melodyNotes = [];
     for(let i=0;i<32;i++){
-        let note = rootMidi + scale[floor(random(scale.length))] + floor(random(-1,2))*12;
-        melodyPattern.push(note);
+        let step = scale[floor(random(scale.length))];
+        let octave = floor(random(0,2)) * 12;
+        melodyNotes.push(rootMidi + step + octave);
     }
 }
 
+// Create chord roots
 function generateChords(){
+    chordRoots = [];
     for(let i=0;i<16;i++){
-        let root = rootMidi + scale[floor(random(scale.length))];
-        chordPattern.push([root,root+4,root+7]);
+        chordRoots.push(rootMidi + scale[floor(random(scale.length))]);
     }
 }
 
-function generateBass(){
-    for(let i=0;i<16;i++){
-        bassPattern.push(rootMidi - 12 + scale[floor(random(3))]);
-    }
-}
-
-function generatePercussion(){
-    for(let i=0;i<16;i++){
-        percPattern.push(random() < 0.3); // probability for a hit
-    }
-}
-
-// --- Scheduling Functions ---
+// Scheduling Functions
 function scheduleMelody(){
     let idx = 0;
-    Tone.Transport.scheduleRepeat(time=>{
-        melodySynth.triggerAttackRelease(melodyPattern[idx],'8n',time);
-        idx = (idx+1)%melodyPattern.length;
-    },'8n');
-}
-
-function scheduleChords(){
-    let idx = 0;
-    Tone.Transport.scheduleRepeat(time=>{
-        chordSynth.triggerAttackRelease(chordPattern[idx],'1n',time);
-        idx = (idx+1)%chordPattern.length;
-    },'1n');
+    Tone.Transport.scheduleRepeat((time)=>{
+        melodySynth.triggerAttackRelease(melodyNotes[idx],"8n",time);
+        idx = (idx + 1) % melodyNotes.length;
+    },"8n");
 }
 
 function scheduleBass(){
     let idx = 0;
-    Tone.Transport.scheduleRepeat(time=>{
-        bassSynth.triggerAttackRelease(bassPattern[idx],'2n',time);
-        idx = (idx+1)%bassPattern.length;
-    },'2n');
+    Tone.Transport.scheduleRepeat((time)=>{
+        bassSynth.triggerAttackRelease(rootMidi-12 + scale[floor(random(3))],"2n",time);
+    },"2n");
+}
+
+function scheduleChords(){
+    let idx = 0;
+    Tone.Transport.scheduleRepeat((time)=>{
+        let root = chordRoots[idx];
+        chordSynth.triggerAttackRelease([root, root+4, root+7],"1n",time);
+        idx = (idx + 1) % chordRoots.length;
+    },"1n");
 }
 
 function schedulePads(){
-    let idx = 0;
-    Tone.Transport.scheduleRepeat(time=>{
+    Tone.Transport.scheduleRepeat((time)=>{
         let root = rootMidi + scale[floor(random(scale.length))];
-        padSynth.triggerAttackRelease([root,root+7,root+12],'4n',time);
-    },'4n');
+        padSynth.triggerAttackRelease([root, root+7, root+12],"4n",time);
+    },"4n");
 }
 
 function schedulePercussion(){
-    let idx = 0;
-    Tone.Transport.scheduleRepeat(time=>{
-        if(percPattern[idx]){
-            percSynth.triggerAttackRelease('C2','16n',time);
-        }
-        idx = (idx+1)%percPattern.length;
-    },'16n');
+    Tone.Transport.scheduleRepeat((time)=>{
+        if(random()<0.35) percSynth.triggerAttackRelease("C2","16n",time);
+    },"8n");
 }
 
-// --- User Interaction ---
-// Click or drag to subtly shift melodies and chords
+// 🎛 Interaction: Drag to modify
 function mouseDragged(){
-    let delta = (mouseX-pmouseX)*0.05;
-    melodyPattern = melodyPattern.map(n=>n + floor(delta));
-    chordPattern = chordPattern.map(chord=>chord.map(n=>n + floor(delta/2)));
+    if(!playing) return;
+
+    let dx = mouseX - pmouseX;
+    let dy = mouseY - pmouseY;
+
+    // Horizontal drag shifts melody pattern up/down
+    if(abs(dx) > abs(dy)){
+        let shift = dx > 0 ? 1 : -1;
+        melodyNotes = melodyNotes.map(n => n + shift);
+    }
+    // Vertical drag adjusts tempo
+    else {
+        bpm = constrain(bpm + (dy * 0.1), 60, 140);
+        Tone.Transport.bpm.value = bpm;
+    }
 }
 
-function mousePressed(){
-    // Accent hit: short notes in melody or percussion
-    melodySynth.triggerAttackRelease(rootMidi + scale[floor(random(scale.length))],'8n');
-    percSynth.triggerAttackRelease('C2','8n');
-}
-
-// --- Optional visual feedback ---
 function draw(){
+    if(!playing) return;
     background(17);
-    fill(100,200,255,50);
-    ellipse(width/2,height/2,300,300);
+
+    // Visual feedback can be simple — a pulsing circle
+    let size = 150 + sin(frameCount * 0.05) * 50;
+    fill(100, 200, 255, 50);
+    ellipse(width/2, height/2, size, size);
 }
