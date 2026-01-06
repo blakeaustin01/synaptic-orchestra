@@ -45,6 +45,7 @@ function setup(){
         envelope:{attack:0.1, decay:0.1, sustain:0.5, release:0.6}
     }).connect(filter);
 
+
     chordSynth = new Tone.PolySynth(Tone.Synth,{
         oscillator:{type:"triangle"},
         envelope:{attack:0.2, decay:0.2, sustain:0.5, release:1.0}
