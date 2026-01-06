@@ -1,124 +1,116 @@
-let melodySynth, chordSynth, bassSynth, percSynth;
+let melodySynth, chordSynth, bassSynth, percussionSynth;
 let melodyNotes = [];
 let chordRoots = [];
-let scale = [0,2,4,5,7,9,11]; // C major
-let rootMidi = 60;             // C4
-let bpm = 90;
+let bassNotes = [];
+let percussionPattern = [];
+let scale = ["C4", "D4", "E4", "G4", "A4"];
+let tempo = 120;
+let dragStart = null;
 
-let playing = false;
-
-function setup(){
+function setup() {
     createCanvas(windowWidth, windowHeight);
-    noLoop();
 
-    document.getElementById("startBtn").addEventListener("click", async ()=>{
-        await Tone.start();
-        startOrchestra();
-    });
-}
+    // Synth setup
+    melodySynth = new Tone.Synth({
+        oscillator: { type: "sine" },
+        envelope: { attack: 0.05, release: 0.3 }
+    }).toDestination();
 
-function startOrchestra(){
-    document.getElementById("startUI").style.display = "none";
-    loop();
-    playing = true;
+    chordSynth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: "triangle" },
+        envelope: { attack: 0.1, release: 0.5 }
+    }).toDestination();
 
-    // Synth Layers
-    melodySynth = new Tone.Synth({oscillator:{type:"triangle"},envelope:{attack:0.05,release:0.25}}).toDestination();
-    chordSynth = new Tone.PolySynth(Tone.Synth,{oscillator:{type:"sine"},envelope:{attack:0.2,release:1}}).toDestination();
-    bassSynth = new Tone.MonoSynth({oscillator:{type:"square"},envelope:{attack:0.01,release:0.3}}).toDestination();
-    percSynth = new Tone.MembraneSynth({pitchDecay:0.05,octaves:3,envelope:{attack:0.001,decay:0.2,release:0.2}}).toDestination();
+    bassSynth = new Tone.Synth({
+        oscillator: { type: "square" },
+        envelope: { attack: 0.05, release: 0.4 }
+    }).toDestination();
 
-    Tone.Transport.bpm.value = bpm;
+    percussionSynth = new Tone.MembraneSynth({
+        pitchDecay: 0.05,
+        octaves: 4,
+        envelope: { attack: 0.001, decay: 0.2, sustain: 0, release: 0.2 }
+    }).toDestination();
+
+    // Initialize arrays
+    for (let i = 0; i < 8; i++) {
+        melodyNotes.push(random(scale));
+        chordRoots.push(random(scale));
+        bassNotes.push(random(["C2","D2","E2","G2","A2"]));
+        percussionPattern.push(random([0,1])); // 0 = silent, 1 = hit
+    }
+
+    Tone.Transport.bpm.value = tempo;
     Tone.Transport.start();
 
-    // Generate Patterns
-    generateMelody();
-    generateChords();
-
-    // Schedule Loops
-    scheduleMelody();
-    scheduleBass();
-    scheduleChords();
-    schedulePercussion();
+    scheduleMusic();
 }
 
-// === Pattern Generators ===
-function generateMelody(){
-    melodyNotes = [];
-    for(let i=0;i<32;i++){
-        let step = scale[floor(random(scale.length))];
-        let octave = floor(random(0,2))*12;
-        melodyNotes.push(rootMidi + step + octave);
+// Schedule the repeating loops
+function scheduleMusic() {
+    Tone.Transport.scheduleRepeat(playMelody, "4n");
+    Tone.Transport.scheduleRepeat(playChords, "1n");
+    Tone.Transport.scheduleRepeat(playBass, "2n");
+    Tone.Transport.scheduleRepeat(playPercussion, "8n");
+}
+
+function playMelody(time){
+    let note = random(melodyNotes);
+    melodySynth.triggerAttackRelease(note, "8n", time);
+}
+
+function playChords(time){
+    let root = random(chordRoots);
+    chordSynth.triggerAttackRelease([root, Tone.Frequency(root).transpose(4), Tone.Frequency(root).transpose(7)], "1n", time);
+}
+
+function playBass(time){
+    let note = random(bassNotes);
+    bassSynth.triggerAttackRelease(note, "4n", time);
+}
+
+function playPercussion(time){
+    if (random() > 0.5) percussionSynth.triggerAttackRelease("C2", "8n", time);
+}
+
+// USER INTERACTIONS
+function mousePressed() {
+    dragStart = {x: mouseX, y: mouseY};
+    // accent/percussion
+    melodySynth.triggerAttackRelease(random(scale), "16n");
+    percussionSynth.triggerAttackRelease("C2", "16n");
+}
+
+function mouseDragged() {
+    if (!dragStart) return;
+
+    let dx = mouseX - dragStart.x;
+    let dy = mouseY - dragStart.y;
+
+    // Horizontal drag -> transpose melody
+    if (Math.abs(dx) > 5) {
+        melodyNotes = melodyNotes.map(n => Tone.Frequency(n).transpose(dx > 0 ? 1 : -1).toNote());
+        dragStart.x = mouseX;
+    }
+
+    // Vertical drag -> tempo
+    if (Math.abs(dy) > 5) {
+        tempo += dy > 0 ? -1 : 1;
+        Tone.Transport.bpm.value = constrain(tempo, 60, 200);
+        dragStart.y = mouseY;
     }
 }
 
-function generateChords(){
-    chordRoots = [];
-    for(let i=0;i<16;i++){
-        chordRoots.push(rootMidi + scale[floor(random(scale.length))]);
-    }
+// VISUALS
+function draw() {
+    background(17, 17, 17, 50);
+
+    noStroke();
+    fill(255, 100, 150, 100);
+    ellipse(random(width), random(height), random(5,20));
 }
 
-// === Scheduling Loops ===
-function scheduleMelody(){
-    let idx=0;
-    Tone.Transport.scheduleRepeat(time=>{
-        melodySynth.triggerAttackRelease(melodyNotes[idx],"8n",time);
-        idx = (idx+1) % melodyNotes.length;
-    },"8n");
-}
-
-function scheduleBass(){
-    Tone.Transport.scheduleRepeat(time=>{
-        let bassNote = rootMidi-12 + scale[floor(random(3))];
-        bassSynth.triggerAttackRelease(bassNote,"2n",time);
-    },"2n");
-}
-
-function scheduleChords(){
-    let idx=0;
-    Tone.Transport.scheduleRepeat(time=>{
-        let root = chordRoots[idx];
-        chordSynth.triggerAttackRelease([root, root+4, root+7],"1n",time);
-        idx = (idx+1) % chordRoots.length;
-    },"1n");
-}
-
-function schedulePercussion(){
-    Tone.Transport.scheduleRepeat(time=>{
-        if(random()<0.35) percSynth.triggerAttackRelease("C2","16n",time);
-    },"8n");
-}
-
-// === Interaction ===
-function mouseDragged(){
-    if(!playing) return;
-    let dx = mouseX-pmouseX;
-    let dy = mouseY-pmouseY;
-
-    // Horizontal drag shifts melody
-    if(abs(dx) > abs(dy)){
-        let shift = dx>0 ? 1 : -1;
-        melodyNotes = melodyNotes.map(n=>n+shift);
-    }
-    // Vertical drag changes tempo
-    else{
-        bpm = constrain(bpm + dy*0.2, 60, 160);
-        Tone.Transport.bpm.value = bpm;
-    }
-}
-
-function mousePressed(){
-    if(!playing) return;
-    // Accent hit
-    melodySynth.triggerAttackRelease(rootMidi+scale[floor(random(scale.length))],"8n");
-    percSynth.triggerAttackRelease("C2","8n");
-}
-
-// === Minimal visuals ===
-function draw(){
-    if(!playing) return;
-    background(17);
-    fill(100,200,255,50);
-    ellipse(width/2, height/2, 150+sin(frameCount*0.05)*50, 150+sin(frameCount*0.05)*50);
-}
+document.getElementById("startBtn").addEventListener("click", async () => {
+    await Tone.start();
+    document.getElementById("startScreen").style.display = "none";
+});
