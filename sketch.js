@@ -1,47 +1,81 @@
+// --- SYNTHS & EFFECTS (Ambient Version) ---
 let melodySynth, chordSynth, bassSynth, percussionSynth, padSynth;
 let reverb, delay, filter;
+let padVolume = 0.3;
 
-let melodyNotes = [], chordRoots = [], bassNotes = [], percussionPattern = [], padNotes = [];
-let scale = ["C4","D4","E4","G4","A4"];
+// --- MUSIC DATA ---
+let melodyNotes=[], chordRoots=[], bassNotes=[], percussionPattern=[], padNotes=[];
+let scaleModes = [
+    ["C4","D4","E4","G4","A4"], // Major Pentatonic
+    ["C4","D4","Eb4","G4","A4"], // Minor Pentatonic
+    ["C4","D4","E4","F4","G4","A4","B4"], // Major Scale
+    ["C4","D4","Eb4","F4","G4","Ab4","Bb4"] // Minor Scale
+];
+let currentScale = scaleModes[0];
 let tempo = 120;
 let dragStart = null;
 
 // --- MEMORY SYSTEM ---
-let melodyHistory = [];
-let chordHistory = [];
-let bassHistory = [];
-let percussionHistory = [];
-const historyMax = 20; // number of past notes remembered
+let melodyHistory=[], chordHistory=[], bassHistory=[], percussionHistory=[];
+const historyMax = 25; 
+
+// --- LOAD PERSISTENT MEMORY ---
+if(localStorage.getItem("melodyHistory")) melodyHistory = JSON.parse(localStorage.getItem("melodyHistory"));
+if(localStorage.getItem("chordHistory")) chordHistory = JSON.parse(localStorage.getItem("chordHistory"));
+if(localStorage.getItem("bassHistory")) bassHistory = JSON.parse(localStorage.getItem("bassHistory"));
+if(localStorage.getItem("percussionHistory")) percussionHistory = JSON.parse(localStorage.getItem("percussionHistory"));
 
 // --- SETUP ---
-function setup() {
+function setup(){
     createCanvas(windowWidth, windowHeight);
 
     // Effects
-    reverb = new Tone.Reverb({ decay: 4, wet: 0.3 }).toDestination();
-    delay = new Tone.FeedbackDelay({ delayTime: "8n", feedback: 0.2, wet: 0.2 }).toDestination();
-    filter = new Tone.Filter(1000, "lowpass").toDestination();
+    reverb = new Tone.Reverb({decay:6, wet:0.4}).toDestination(); // longer decay for smoothness
+    delay = new Tone.FeedbackDelay({delayTime:"8n", feedback:0.2, wet:0.2}).toDestination();
+    filter = new Tone.Filter(1200,"lowpass").toDestination(); // soften highs
 
-    // Synths
-    melodySynth = new Tone.Synth({ oscillator:{type:"sine"}, envelope:{attack:0.05, release:0.3} }).connect(filter);
-    chordSynth = new Tone.PolySynth(Tone.Synth, { oscillator:{type:"triangle"}, envelope:{attack:0.1, release:0.5} }).connect(reverb);
-    bassSynth = new Tone.Synth({ oscillator:{type:"square"}, envelope:{attack:0.05, release:0.4} }).connect(filter);
-    percussionSynth = new Tone.MembraneSynth({ pitchDecay:0.05, octaves:4, envelope:{attack:0.001, decay:0.2, sustain:0, release:0.2} }).toDestination();
-    padSynth = new Tone.PolySynth(Tone.Synth, { oscillator:{type:"sawtooth"}, envelope:{attack:0.5, release:1.5} }).connect(reverb);
+    // --- Ambient Synths ---
+    melodySynth = new Tone.Synth({
+        oscillator:{type:"triangle"},
+        envelope:{attack:0.1, decay:0.1, sustain:0.5, release:0.6}
+    }).connect(filter);
+
+    chordSynth = new Tone.PolySynth(Tone.Synth,{
+        oscillator:{type:"triangle"},
+        envelope:{attack:0.2, decay:0.2, sustain:0.5, release:1.0}
+    }).connect(reverb);
+
+    bassSynth = new Tone.Synth({
+        oscillator:{type:"sine"},
+        envelope:{attack:0.2, decay:0.2, sustain:0.4, release:0.8}
+    }).connect(filter);
+
+    percussionSynth = new Tone.MembraneSynth({
+        pitchDecay:0.05, octaves:3,
+        envelope:{attack:0.01, decay:0.15, sustain:0, release:0.1}
+    }).toDestination();
+
+    padSynth = new Tone.PolySynth(Tone.Synth,{
+        oscillator:{type:"fatsine", count:2, spread:10},
+        envelope:{attack:0.5, decay:0.3, sustain:0.4, release:1.2}
+    }).connect(reverb);
 
     // Initialize sequences
     for(let i=0;i<8;i++){
-        melodyNotes.push(random(scale));
-        chordRoots.push(random(scale));
+        melodyNotes.push(random(currentScale));
+        chordRoots.push(random(currentScale));
         bassNotes.push(random(["C2","D2","E2","G2","A2"]));
         percussionPattern.push(random([0,1]));
-        padNotes.push(random(scale.map(n=>Tone.Frequency(n).transpose(-12).toNote())));
+        padNotes.push(random(currentScale.map(n=>Tone.Frequency(n).transpose(-12).toNote())));
     }
 
     Tone.Transport.bpm.value = tempo;
     Tone.Transport.start();
 
     scheduleMusic();
+
+    // Periodically change scale/mode
+    setInterval(()=>{currentScale = random(scaleModes)}, 30000);
 }
 
 // --- MUSIC SCHEDULING ---
@@ -53,10 +87,10 @@ function scheduleMusic(){
     Tone.Transport.scheduleRepeat(playPads,"2n");
 }
 
-// --- MEMORY-BASED SELECTION ---
+// --- MEMORY-WEIGHTED SELECTION ---
 function weightedChoice(arr, history){
-    if(history.length === 0) return random(arr);
-    let weighted = [];
+    if(history.length===0) return random(arr);
+    let weighted=[];
     arr.forEach(n=>{
         let count = history.filter(h=>h===n).length + 1;
         for(let i=0;i<count;i++) weighted.push(n);
@@ -68,31 +102,24 @@ function weightedChoice(arr, history){
 function playMelody(time){
     let note = weightedChoice(melodyNotes, melodyHistory);
     melodySynth.triggerAttackRelease(note,"8n",time);
-    melodyHistory.push(note);
-    if(melodyHistory.length>historyMax) melodyHistory.shift();
+    melodyHistory.push(note); if(melodyHistory.length>historyMax) melodyHistory.shift();
 }
 
 function playChords(time){
     let root = weightedChoice(chordRoots, chordHistory);
     chordSynth.triggerAttackRelease([root, Tone.Frequency(root).transpose(4), Tone.Frequency(root).transpose(7)], "1n", time);
-    chordHistory.push(root);
-    if(chordHistory.length>historyMax) chordHistory.shift();
+    chordHistory.push(root); if(chordHistory.length>historyMax) chordHistory.shift();
 }
 
 function playBass(time){
     let note = weightedChoice(bassNotes, bassHistory);
     bassSynth.triggerAttackRelease(note,"4n",time);
-    bassHistory.push(note);
-    if(bassHistory.length>historyMax) bassHistory.shift();
+    bassHistory.push(note); if(bassHistory.length>historyMax) bassHistory.shift();
 }
 
 function playPercussion(time){
-    if(random()>0.4){
-        percussionSynth.triggerAttackRelease("C2","8n",time);
-        percussionHistory.push(1);
-    } else {
-        percussionHistory.push(0);
-    }
+    if(random()>0.5){ percussionSynth.triggerAttackRelease("C2","8n",time); percussionHistory.push(1); }
+    else percussionHistory.push(0);
     if(percussionHistory.length>historyMax) percussionHistory.shift();
 }
 
@@ -106,7 +133,7 @@ function playPads(time){
 // --- USER INTERACTION ---
 function mousePressed(){
     dragStart = {x:mouseX, y:mouseY};
-    melodySynth.triggerAttackRelease(random(scale),"16n");
+    melodySynth.triggerAttackRelease(random(currentScale),"16n");
     percussionSynth.triggerAttackRelease("C2","16n");
 }
 
@@ -121,33 +148,26 @@ function mouseDragged(){
         dragStart.x = mouseX;
     }
 
-    // Vertical drag → tempo
+    // Vertical drag → tempo & filter
     if(Math.abs(dy)>5){
         tempo += dy>0?-1:1;
-        Tone.Transport.bpm.value = constrain(tempo,60,200);
+        Tone.Transport.bpm.value = constrain(tempo,60,180);
+        filter.frequency.value = constrain(map(mouseY,0,height,500,3000),500,3000);
         dragStart.y = mouseY;
     }
 
-    // Horizontal drag also changes filter cutoff for dynamic sound
-    filter.frequency.value = constrain(map(mouseX,0,width,200,2000),200,2000);
+    // Horizontal drag → pad volume
+    padVolume = constrain(map(mouseX,0,width,0.1,0.5),0.1,0.5);
+    padSynth.volume.value = Tone.gainToDb(padVolume);
 }
 
 // --- VISUALS ---
 function draw(){
     background(13,13,13,50);
-
-    // Melody pulses
     noStroke();
-    fill(255,100,150,80);
-    for(let i=0;i<5;i++) ellipse(random(width), random(height/2), random(10,30));
-
-    // Chord pulses
-    fill(100,200,255,50);
-    for(let i=0;i<3;i++) ellipse(random(width), random(height/2,height), random(20,50));
-
-    // Pads
-    fill(50,255,150,30);
-    for(let i=0;i<2;i++) ellipse(random(width), random(height), random(50,100));
+    fill(255,100,150,80); for(let i=0;i<5;i++) ellipse(random(width), random(height/2), random(10,30));
+    fill(100,200,255,50); for(let i=0;i<3;i++) ellipse(random(width), random(height/2,height), random(20,50));
+    fill(50,255,150,30); for(let i=0;i<2;i++) ellipse(random(width), random(height), random(50,100));
 }
 
 // --- START BUTTON ---
@@ -155,3 +175,11 @@ document.getElementById("startBtn").addEventListener("click", async ()=>{
     await Tone.start();
     document.getElementById("startScreen").style.display = "none";
 });
+
+// --- SAVE MEMORY ---
+setInterval(()=>{
+    localStorage.setItem("melodyHistory", JSON.stringify(melodyHistory));
+    localStorage.setItem("chordHistory", JSON.stringify(chordHistory));
+    localStorage.setItem("bassHistory", JSON.stringify(bassHistory));
+    localStorage.setItem("percussionHistory", JSON.stringify(percussionHistory));
+},5000);
