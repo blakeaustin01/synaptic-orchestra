@@ -1,15 +1,20 @@
-// --- SYNTHS & EFFECTS (Ambient Version) ---
+// --- SYNTHS & EFFECTS (Ambient Breathing Version) ---
 let melodySynth, chordSynth, bassSynth, percussionSynth, padSynth;
 let reverb, delay, filter;
 let padVolume = 0.3;
 
+// --- MICRO-MODULATION VARIABLES ---
+let melodyDetunePhase = 0;
+let padDetunePhase = 0;
+let padFilterPhase = 0;
+
 // --- MUSIC DATA ---
 let melodyNotes=[], chordRoots=[], bassNotes=[], percussionPattern=[], padNotes=[];
 let scaleModes = [
-    ["C4","D4","E4","G4","A4"], // Major Pentatonic
-    ["C4","D4","Eb4","G4","A4"], // Minor Pentatonic
-    ["C4","D4","E4","F4","G4","A4","B4"], // Major Scale
-    ["C4","D4","Eb4","F4","G4","Ab4","Bb4"] // Minor Scale
+    ["C4","D4","E4","G4","A4"],
+    ["C4","D4","Eb4","G4","A4"],
+    ["C4","D4","E4","F4","G4","A4","B4"],
+    ["C4","D4","Eb4","F4","G4","Ab4","Bb4"]
 ];
 let currentScale = scaleModes[0];
 let tempo = 120;
@@ -19,7 +24,7 @@ let dragStart = null;
 let melodyHistory=[], chordHistory=[], bassHistory=[], percussionHistory=[];
 const historyMax = 25; 
 
-// --- LOAD PERSISTENT MEMORY ---
+// --- LOAD MEMORY ---
 if(localStorage.getItem("melodyHistory")) melodyHistory = JSON.parse(localStorage.getItem("melodyHistory"));
 if(localStorage.getItem("chordHistory")) chordHistory = JSON.parse(localStorage.getItem("chordHistory"));
 if(localStorage.getItem("bassHistory")) bassHistory = JSON.parse(localStorage.getItem("bassHistory"));
@@ -30,9 +35,9 @@ function setup(){
     createCanvas(windowWidth, windowHeight);
 
     // Effects
-    reverb = new Tone.Reverb({decay:6, wet:0.4}).toDestination(); // longer decay for smoothness
+    reverb = new Tone.Reverb({decay:6, wet:0.4}).toDestination();
     delay = new Tone.FeedbackDelay({delayTime:"8n", feedback:0.2, wet:0.2}).toDestination();
-    filter = new Tone.Filter(1200,"lowpass").toDestination(); // soften highs
+    filter = new Tone.Filter(1200,"lowpass").toDestination();
 
     // --- Ambient Synths ---
     melodySynth = new Tone.Synth({
@@ -74,8 +79,19 @@ function setup(){
 
     scheduleMusic();
 
-    // Periodically change scale/mode
     setInterval(()=>{currentScale = random(scaleModes)}, 30000);
+
+    // --- MODULATION LOOP ---
+    new Tone.Loop(time=>{
+        // slow breathing modulation
+        melodyDetunePhase += 0.002;
+        padDetunePhase += 0.0015;
+        padFilterPhase += 0.001;
+
+        melodySynth.detune.value = Math.sin(melodyDetunePhase * Math.PI*2) * 10; // ±10 cents
+        padSynth.detune.value = Math.sin(padDetunePhase * Math.PI*2) * 2; // ±2 semitones
+        filter.frequency.value = 1200 + Math.sin(padFilterPhase * Math.PI*2)*300;
+    }, "16n").start(0);
 }
 
 // --- MUSIC SCHEDULING ---
@@ -142,21 +158,17 @@ function mouseDragged(){
     let dx = mouseX - dragStart.x;
     let dy = mouseY - dragStart.y;
 
-    // Horizontal drag → transpose melody
     if(Math.abs(dx)>5){
         melodyNotes = melodyNotes.map(n=>Tone.Frequency(n).transpose(dx>0?1:-1).toNote());
         dragStart.x = mouseX;
     }
 
-    // Vertical drag → tempo & filter
     if(Math.abs(dy)>5){
         tempo += dy>0?-1:1;
         Tone.Transport.bpm.value = constrain(tempo,60,180);
-        filter.frequency.value = constrain(map(mouseY,0,height,500,3000),500,3000);
         dragStart.y = mouseY;
     }
 
-    // Horizontal drag → pad volume
     padVolume = constrain(map(mouseX,0,width,0.1,0.5),0.1,0.5);
     padSynth.volume.value = Tone.gainToDb(padVolume);
 }
@@ -183,3 +195,4 @@ setInterval(()=>{
     localStorage.setItem("bassHistory", JSON.stringify(bassHistory));
     localStorage.setItem("percussionHistory", JSON.stringify(percussionHistory));
 },5000);
+
