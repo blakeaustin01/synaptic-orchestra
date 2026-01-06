@@ -1,28 +1,37 @@
 body {
     margin: 0;
     overflow: hidden;
-    background-color: #111;
+    background: #111;
     color: #eee;
-    font-family: 'Helvetica', sans-serif;
+    font-family: sans-serif;
     text-align: center;
+}
+
+#startUI {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+button {
+    padding: 15px 30px;
+    font-size: 18px;
+    cursor: pointer;
 }
 
 h1 {
     position: absolute;
     top: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 32px;
-    z-index: 10;
+    width: 100%;
+    font-size: 28px;
 }
 
 p {
     position: absolute;
-    top: 60px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 45px;
+    width: 100%;
     font-size: 16px;
-    z-index: 10;
     color: #ccc;
 }
 
